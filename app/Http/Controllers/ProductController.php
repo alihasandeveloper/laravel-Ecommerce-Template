@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ProductRequest;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Storage;
@@ -20,7 +21,7 @@ class ProductController extends Controller
     {
         return Inertia::render('products/index', [
             'products' => Product::query()
-                ->with('categories:id,name')
+                ->with(['categories:id,name', 'images:id,product_id,path,sort_order'])
                 ->latest()
                 ->get(['id', 'category_id', 'name', 'price', 'stock', 'image', 'created_at'])
                 ->map(fn (Product $product): array => [
@@ -30,6 +31,10 @@ class ProductController extends Controller
                     'stock' => $product->stock,
                     'image' => $product->image,
                     'image_url' => $product->image ? Storage::disk('public')->url($product->image) : null,
+                    'images' => $product->images->map(fn (ProductImage $image): array => [
+                        'id' => $image->id,
+                        'url' => Storage::disk('public')->url($image->path),
+                    ])->values(),
                     'categories' => $product->categories->map->only(['id', 'name'])->values(),
                 ]),
         ]);
@@ -53,6 +58,8 @@ class ProductController extends Controller
         $categoryIds = $request->validated('category_ids');
         $product = Product::create($this->validatedProductData($request, $categoryIds));
         $product->categories()->sync($categoryIds);
+        $this->storeGalleryImages($request, $product);
+        $this->syncCoverImage($product);
 
         return to_route('products.index');
     }
@@ -74,6 +81,12 @@ class ProductController extends Controller
             'product' => [
                 ...$product->only(['id', 'category_id', 'name', 'price', 'description', 'stock', 'image']),
                 'image_url' => $product->image ? Storage::disk('public')->url($product->image) : null,
+                'images' => $product->images()
+                    ->get(['id', 'path'])
+                    ->map(fn (ProductImage $image): array => [
+                        'id' => $image->id,
+                        'url' => Storage::disk('public')->url($image->path),
+                    ]),
                 'category_ids' => $product->categories()->pluck('categories.id'),
             ],
             'categories' => $this->categoriesForSelect(),
@@ -88,12 +101,11 @@ class ProductController extends Controller
         $categoryIds = $request->validated('category_ids');
         $data = $this->validatedProductData($request, $categoryIds);
 
-        if ($request->hasFile('image') && $product->image) {
-            Storage::disk('public')->delete($product->image);
-        }
-
         $product->update($data);
         $product->categories()->sync($categoryIds);
+        $this->deleteSelectedImages($request, $product);
+        $this->storeGalleryImages($request, $product);
+        $this->syncCoverImage($product);
 
         return to_route('products.index');
     }
@@ -103,9 +115,9 @@ class ProductController extends Controller
      */
     public function destroy(Product $product): RedirectResponse
     {
-        if ($product->image) {
-            Storage::disk('public')->delete($product->image);
-        }
+        $product->images()->get()->each(function (ProductImage $image): void {
+            Storage::disk('public')->delete($image->path);
+        });
 
         $product->delete();
 
@@ -129,15 +141,52 @@ class ProductController extends Controller
     {
         $data = $request->validated();
 
-        unset($data['image']);
+        unset($data['images']);
+        unset($data['remove_image_ids']);
         unset($data['category_ids']);
 
         $data['category_id'] = $categoryIds[0];
 
-        if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('products', 'public');
+        return $data;
+    }
+
+    private function storeGalleryImages(ProductRequest $request, Product $product): void
+    {
+        if (! $request->hasFile('images')) {
+            return;
         }
 
-        return $data;
+        $nextSortOrder = (int) $product->images()->max('sort_order') + 1;
+
+        foreach ($request->file('images') as $image) {
+            $product->images()->create([
+                'path' => $image->store('products', 'public'),
+                'sort_order' => $nextSortOrder++,
+            ]);
+        }
+    }
+
+    private function deleteSelectedImages(ProductRequest $request, Product $product): void
+    {
+        $imageIds = $request->validated('remove_image_ids') ?? [];
+
+        if ($imageIds === []) {
+            return;
+        }
+
+        $product->images()
+            ->whereIn('id', $imageIds)
+            ->get()
+            ->each(function (ProductImage $image): void {
+                Storage::disk('public')->delete($image->path);
+                $image->delete();
+            });
+    }
+
+    private function syncCoverImage(Product $product): void
+    {
+        $product->forceFill([
+            'image' => $product->images()->value('path'),
+        ])->save();
     }
 }

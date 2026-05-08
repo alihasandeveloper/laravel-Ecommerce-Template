@@ -11,6 +11,10 @@ type Product = {
     stock: number;
     image: string | null;
     image_url: string | null;
+    images: {
+        id: number;
+        url: string;
+    }[];
     categories: {
         id: number;
         name: string;
@@ -60,12 +64,19 @@ export default function ProductsIndex({ products }: { products: Product[] }) {
                                     className="border-b last:border-b-0"
                                 >
                                     <td className="px-4 py-3">
-                                        {product.image_url ? (
-                                            <img
-                                                src={product.image_url}
-                                                alt={product.name}
-                                                className="size-12 rounded-md object-cover"
-                                            />
+                                        {product.images.length > 0 ? (
+                                            <div className="flex -space-x-2">
+                                                {product.images
+                                                    .slice(0, 3)
+                                                    .map((image) => (
+                                                        <img
+                                                            key={image.id}
+                                                            src={image.url}
+                                                            alt={product.name}
+                                                            className="size-12 rounded-md border bg-background object-cover"
+                                                        />
+                                                    ))}
+                                            </div>
                                         ) : (
                                             <div className="size-12 rounded-md border border-dashed bg-muted/30" />
                                         )}

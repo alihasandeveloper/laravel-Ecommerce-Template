@@ -20,6 +20,10 @@ type Product = {
     stock: number;
     image: string | null;
     image_url: string | null;
+    images: {
+        id: number;
+        url: string;
+    }[];
     category_ids: number[];
 };
 
@@ -113,21 +117,40 @@ export default function ProductsEdit({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="image">Image</Label>
-                                {product.image_url && (
-                                    <img
-                                        src={product.image_url}
-                                        alt={product.name}
-                                        className="size-24 rounded-md object-cover"
-                                    />
+                                <Label htmlFor="images">Gallery</Label>
+                                {product.images.length > 0 && (
+                                    <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-2 md:grid-cols-3">
+                                        {product.images.map((image) => (
+                                            <label
+                                                key={image.id}
+                                                className="space-y-2 text-sm"
+                                            >
+                                                <img
+                                                    src={image.url}
+                                                    alt={product.name}
+                                                    className="aspect-square w-full rounded-md object-cover"
+                                                />
+                                                <span className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="remove_image_ids[]"
+                                                        value={image.id}
+                                                        className="size-4 rounded border-input"
+                                                    />
+                                                    Remove
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
                                 )}
                                 <Input
-                                    id="image"
-                                    name="image"
+                                    id="images"
+                                    name="images[]"
                                     type="file"
                                     accept="image/*"
+                                    multiple
                                 />
-                                <InputError message={errors.image} />
+                                <InputError message={errors.images} />
                             </div>
 
                             {progress && (

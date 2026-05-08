@@ -30,7 +30,10 @@ class ProductRequest extends FormRequest
             'price' => ['required', 'numeric', 'min:0'],
             'description' => ['nullable', 'string'],
             'stock' => ['required', 'integer', 'min:0'],
-            'image' => ['nullable', 'image', 'max:2048'],
+            'images' => ['nullable', 'array'],
+            'images.*' => ['image', 'max:2048'],
+            'remove_image_ids' => ['nullable', 'array'],
+            'remove_image_ids.*' => ['integer', Rule::exists('product_images', 'id')],
         ];
     }
 }

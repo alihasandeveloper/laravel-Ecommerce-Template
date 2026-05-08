@@ -98,14 +98,15 @@ export default function ProductsCreate({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="image">Image</Label>
+                                <Label htmlFor="images">Gallery</Label>
                                 <Input
-                                    id="image"
-                                    name="image"
+                                    id="images"
+                                    name="images[]"
                                     type="file"
                                     accept="image/*"
+                                    multiple
                                 />
-                                <InputError message={errors.image} />
+                                <InputError message={errors.images} />
                             </div>
 
                             {progress && (

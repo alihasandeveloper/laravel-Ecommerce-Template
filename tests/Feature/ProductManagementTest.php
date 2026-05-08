@@ -53,14 +53,19 @@ test('authenticated users can manage products', function () {
         'price' => 99.99,
         'description' => 'Noise cancelling headphones.',
         'stock' => 10,
-        'image' => UploadedFile::fake()->image('headphones.jpg'),
+        'images' => [
+            UploadedFile::fake()->image('headphones-front.jpg'),
+            UploadedFile::fake()->image('headphones-side.jpg'),
+        ],
     ])->assertRedirect(route('products.index'));
 
     $product = Product::where('name', 'Headphones')->firstOrFail();
     $this->assertModelExists($product);
+    expect($product->images)->toHaveCount(2);
     Storage::disk('public')->assertExists($product->image);
 
     $originalImage = $product->image;
+    $removedImage = $product->images->first();
 
     $this->post(route('products.update', $product), [
         '_method' => 'PUT',
@@ -70,21 +75,28 @@ test('authenticated users can manage products', function () {
         'price' => 129.99,
         'description' => 'Updated description.',
         'stock' => 8,
-        'image' => UploadedFile::fake()->image('studio-headphones.jpg'),
+        'remove_image_ids' => [$removedImage->id],
+        'images' => [
+            UploadedFile::fake()->image('studio-headphones.jpg'),
+        ],
     ])->assertRedirect(route('products.index'));
 
-    expect($product->refresh())
+    expect($product->refresh()->load('images'))
         ->name->toBe('Studio Headphones')
-        ->stock->toBe(8);
+        ->stock->toBe(8)
+        ->images->toHaveCount(2);
 
     Storage::disk('public')->assertMissing($originalImage);
-    Storage::disk('public')->assertExists($product->image);
+    Storage::disk('public')->assertExists($product->images->last()->path);
 
-    $updatedImage = $product->image;
+    $remainingImages = $product->images->pluck('path')->all();
 
     $this->delete(route('products.destroy', $product))
         ->assertRedirect(route('products.index'));
 
     $this->assertModelMissing($product);
-    Storage::disk('public')->assertMissing($updatedImage);
+
+    foreach ($remainingImages as $image) {
+        Storage::disk('public')->assertMissing($image);
+    }
 });
